@@ -2,21 +2,22 @@ import asyncio
 import functools
 import msvcrt
 import sys
-from typing import Any, Coroutine, Iterable, MutableSet, TypeVar
+from typing import Any, Coroutine, Iterable, MutableSet
 
 
 SERVER_PORT = 3030
 MESSAGE_MAX_SIZE = 10240
 
 
+INETAddress = tuple[str, int] | tuple[str, int, int, int]
+
+
 ###############################################################################
 ## Server                                                                    ##
 ###############################################################################
 
-T = TypeVar("T")
 
-
-def create_background_task(coro: Coroutine[Any, Any, T], bg_tasks: MutableSet):
+def create_background_task(coro: Coroutine[Any, Any, Any], bg_tasks: MutableSet[asyncio.Task[Any]]):
     task = asyncio.create_task(coro)
     bg_tasks.add(task)
     task.add_done_callback(bg_tasks.discard)
@@ -28,9 +29,9 @@ async def handle_client_connection(
     writer: asyncio.StreamWriter,
     *,
     lock: asyncio.Lock,
-    connections: dict[tuple, asyncio.StreamWriter],
+    connections: dict[INETAddress, asyncio.StreamWriter],
 ):
-    background_tasks: set[asyncio.Task] = set()
+    background_tasks: set[asyncio.Task[Any]] = set()
     addr = writer.get_extra_info("peername")
     async with lock:
         connections[addr] = writer
@@ -130,7 +131,7 @@ async def receive_data(data: bytes, client_data: dict[str, Any]):
         )
 
 
-async def server_main(host: str, port: int):
+async def server_main(host: str, port: int | str):
     connections = {}
     lock = asyncio.Lock()
     client_connected_cb = functools.partial(
@@ -192,10 +193,10 @@ def get_input_line():
     return current_input_line.decode("cp850", errors="ignore")
 
 
-async def client_main(host, port):
+async def client_main(host: str, port: int | str):
     prompt = "# "
-    reader: asyncio.StreamReader = None
-    writer: asyncio.StreamWriter = None
+    reader: asyncio.StreamReader | None = None
+    writer: asyncio.StreamWriter | None = None
     try:
         reader, writer = await asyncio.open_connection(host, port)
         print(f"Connecté à {host}:{port}")
